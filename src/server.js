@@ -41,6 +41,12 @@ const app = express()
 const PORT = process.env.PORT || 5000
 const isProduction = process.env.NODE_ENV === "production"
 
+// Necesario detrás de proxies/load balancers (Render, Railway, Nginx, etc.)
+// para que express-rate-limit pueda identificar correctamente la IP del cliente.
+if (isProduction) {
+  app.set("trust proxy", 1)
+}
+
 const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(",")
   : ["http://localhost:5173", "http://localhost:3000"]
