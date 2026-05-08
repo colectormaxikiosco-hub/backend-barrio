@@ -79,14 +79,56 @@ class Plantilla {
 
   // Actualizar plantilla
   static async update(id, plantillaData) {
-    const { nombre, descripcion } = plantillaData
+    const { nombre, descripcion, productos } = plantillaData
+    const connection = await pool.getConnection()
 
-    const [result] = await pool.execute(
-      "UPDATE plantillas SET nombre = ?, descripcion = ?, fecha_actualizacion = NOW() WHERE id = ?",
-      [nombre, descripcion, id],
-    )
+    try {
+      await connection.beginTransaction()
 
-    return result.affectedRows > 0
+      const [result] = await connection.execute(
+        "UPDATE plantillas SET nombre = ?, descripcion = ?, fecha_actualizacion = NOW() WHERE id = ?",
+        [nombre, descripcion || "", id],
+      )
+
+      if (result.affectedRows === 0) {
+        await connection.rollback()
+        return false
+      }
+
+      // Si se envía el arreglo de productos, reemplazamos su contenido completo
+      // en una sola transacción para evitar inconsistencias por múltiples requests.
+      if (Array.isArray(productos)) {
+        await connection.execute("DELETE FROM plantilla_productos WHERE plantilla_id = ?", [id])
+
+        let orden = 1
+        for (const producto of productos) {
+          const productoId = Number(producto.productoId ?? producto.producto_id)
+          const cantidadDeseada = Number(producto.cantidadDeseada ?? producto.cantidad_deseada ?? 0)
+
+          if (!Number.isInteger(productoId) || productoId <= 0) {
+            throw new Error("Producto inválido en la actualización de plantilla")
+          }
+
+          if (!Number.isFinite(cantidadDeseada) || cantidadDeseada < 0) {
+            throw new Error("Cantidad deseada inválida en la actualización de plantilla")
+          }
+
+          await connection.execute(
+            "INSERT INTO plantilla_productos (plantilla_id, producto_id, cantidad_deseada, orden) VALUES (?, ?, ?, ?)",
+            [id, productoId, Math.trunc(cantidadDeseada), orden],
+          )
+          orden += 1
+        }
+      }
+
+      await connection.commit()
+      return true
+    } catch (error) {
+      await connection.rollback()
+      throw error
+    } finally {
+      connection.release()
+    }
   }
 
   // Eliminar plantilla

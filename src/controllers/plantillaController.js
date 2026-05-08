@@ -59,9 +59,16 @@ export const createPlantilla = async (req, res, next) => {
 export const updatePlantilla = async (req, res, next) => {
   try {
     const { id } = req.params
-    const { nombre, descripcion } = req.body
+    const { nombre, descripcion, productos } = req.body
 
-    const updated = await Plantilla.update(id, { nombre, descripcion })
+    if (productos !== undefined && !Array.isArray(productos)) {
+      return res.status(400).json({
+        success: false,
+        message: "El campo productos debe ser un arreglo",
+      })
+    }
+
+    const updated = await Plantilla.update(id, { nombre, descripcion, productos })
 
     if (!updated) {
       return res.status(404).json({
@@ -70,9 +77,12 @@ export const updatePlantilla = async (req, res, next) => {
       })
     }
 
+    const plantillaActualizada = await Plantilla.findById(id)
+
     res.json({
       success: true,
       message: "Plantilla actualizada exitosamente",
+      data: plantillaActualizada,
     })
   } catch (error) {
     next(error)
